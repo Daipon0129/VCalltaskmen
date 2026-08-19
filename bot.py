@@ -494,15 +494,25 @@ async def vc_add_game_target(interaction: discord.Interaction, vc_name: str):
 
 
 @bot.tree.command(name="vc_remove_game_target", description="ゲーム選択ボタン対象VCを削除する")
-@app_commands.describe(vc_id="対象VCのID")
-async def vc_remove_game_target(interaction: discord.Interaction, vc_id: str):
-    vc_id_int = int(vc_id)
+@app_commands.describe(vc_name="対象VCの名前")
+async def vc_remove_game_target(interaction: discord.Interaction, vc_name: str):
+    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if not vc:
+        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
+        return
 
-    if vc_id_int not in config.get("game_targets", []):
+    if vc.id not in config.get("game_targets", []):
         await interaction.response.send_message("そのVCは登録されていません。", ephemeral=True)
         return
 
-    config["game_targets"].remove(vc_id_int)
+    config["game_targets"].remove(vc.id)
+    save_config(config)
+
+    await interaction.response.send_message(
+        f"ゲーム選択ボタン対象から VC「{vc.name}」を削除しました。",
+        ephemeral=True
+    )
+
     save_config(config)
 
     await interaction.response.send_message(
