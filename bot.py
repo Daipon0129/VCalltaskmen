@@ -78,9 +78,12 @@ def save_game_config(cfg):
     save_json(GAME_CONFIG_FILE, cfg)
 
 
+game_config = load_game_config()
+
 if "notice_channel_id" in game_config:
     del game_config["notice_channel_id"]
     save_game_config(game_config)
+
 
 
 
