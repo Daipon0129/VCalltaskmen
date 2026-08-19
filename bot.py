@@ -233,10 +233,10 @@ async def set_game_list_channel(interaction: discord.Interaction, channel_id: st
 
 
 @bot.tree.command(name="set_notice_channel", description="ゲーム選択ボタンを送る通知チャンネルを設定する")
-@app_commands.describe(channel_id="通知チャンネルのID")
-async def set_notice_channel(interaction: discord.Interaction, channel_id: str):
-    ch_id_int = int(channel_id)
-    channel = interaction.guild.get_channel(ch_id_int)
+@app_commands.describe(channel_name="通知チャンネルの名前")
+async def set_notice_channel(interaction: discord.Interaction, channel_name: str):
+    channel = discord.utils.get(interaction.guild.text_channels, name=channel_name)
+
 
     if not isinstance(channel, discord.TextChannel):
         await interaction.response.send_message("そのIDのテキストチャンネルが見つからないよ。", ephemeral=True)
@@ -264,10 +264,10 @@ async def game_channel_status(interaction: discord.Interaction):
 # =========================
 
 @bot.tree.command(name="vc_add", description="VC管理対象を追加する")
-@app_commands.describe(vc_id="対象のVCのID", chat_name="自動生成するチャット名")
-async def vc_add(interaction: discord.Interaction, vc_id: str, chat_name: str):
-    vc_id_int = int(vc_id)
-    if get_vc_target(vc_id_int):
+@app_commands.describe(vc_name="対象VCの名前", chat_name="生成するチャット名")
+async def vc_add(interaction: discord.Interaction, vc_name: str, chat_name: str):
+    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if get_vc_target(vc.id):
         await interaction.response.send_message("そのVCはすでに登録されています。", ephemeral=True)
         return
 
@@ -322,10 +322,11 @@ async def vc_list(interaction: discord.Interaction):
 # =========================
 
 @bot.tree.command(name="vc_set_start_message", description="VCチャットに送る開始メッセージを変更する")
-@app_commands.describe(vc_id="対象のVCのID", message="開始時にVCチャットへ送るメッセージ")
-async def vc_set_start_message(interaction: discord.Interaction, vc_id: str, message: str):
-    vc_id_int = int(vc_id)
-    target = get_vc_target(vc_id_int)
+@app_commands.describe(vc_name="対象VCの名前", message="開始時にVCチャットへ送るメッセージ")
+async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, message: str):
+    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    target = get_vc_target(vc.id)
+
 
     if not target:
         await interaction.response.send_message("そのVCは管理対象に登録されていません。", ephemeral=True)
