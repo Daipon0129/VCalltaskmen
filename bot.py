@@ -46,13 +46,13 @@ def save_json(path, data):
 def load_config():
     cfg = load_json(CONFIG_PATH)
     if "vc_targets" not in cfg:
-        cfg["vc_targets"] = []  # {vc_id, chat_name, start_message, log_start_message_id}
+        cfg["vc_targets"] = []
     if "log_channel_id" not in cfg:
         cfg["log_channel_id"] = None
     if "rename_targets" not in cfg:
-        cfg["rename_targets"] = []  # VC名変更対象VC ID
+        cfg["rename_targets"] = []
     if "game_targets" not in cfg:
-        cfg["game_targets"] = []    # ゲーム選択ボタン対象VC ID
+        cfg["game_targets"] = []
     return cfg
 
 
@@ -71,6 +71,8 @@ def load_game_config():
     cfg = load_json(GAME_CONFIG_FILE)
     if "game_list_channel_id" not in cfg:
         cfg["game_list_channel_id"] = None
+    if "notice_channel_id" not in cfg:
+        cfg["notice_channel_id"] = None
     return cfg
 
 
@@ -79,12 +81,6 @@ def save_game_config(cfg):
 
 
 game_config = load_game_config()
-
-if "notice_channel_id" in game_config:
-    del game_config["notice_channel_id"]
-    save_game_config(game_config)
-
-
 
 
 # =========================
@@ -142,6 +138,8 @@ def extract_base_name(name: str):
         if sep in name:
             return name.split(sep)[0]
     return name
+
+
 # =========================
 # ゲームリスト読み取り
 # =========================
@@ -214,6 +212,7 @@ async def change_vc_name_by_game(interaction: discord.Interaction, title: str):
 # ゲーム関連チャンネル設定コマンド
 # =========================
 
+@bot.tree.command(name="set_game_list_channel", description="ゲームリストチャンネルを設定する")
 @app_commands.describe(channel_id="ゲームリストチャンネルのID")
 async def set_game_list_channel(interaction: discord.Interaction, channel_id: str):
     ch_id_int = int(channel_id)
@@ -250,15 +249,18 @@ async def set_notice_channel(interaction: discord.Interaction, channel_name: str
     )
 
 
-
 @bot.tree.command(name="game_channel_status", description="ゲーム関連チャンネル設定を確認する")
 async def game_channel_status(interaction: discord.Interaction):
     gl = game_config.get("game_list_channel_id")
+    nc = game_config.get("notice_channel_id")
 
     msg = "**ゲーム関連チャンネル設定**\n"
     msg += f"- ゲームリスト: {gl if gl else '未設定'}\n"
+    msg += f"- 通知チャンネル: {nc if nc else '未設定'}\n"
 
     await interaction.response.send_message(msg, ephemeral=True)
+
+
 # =========================
 # VC管理コマンド（追加・削除・一覧）
 # =========================
@@ -307,85 +309,6 @@ async def vc_remove(interaction: discord.Interaction, vc_name: str):
     else:
         await interaction.response.send_message(f"VC「{vc.name}」を管理対象から削除しました。", ephemeral=True)
 
-
-
-@bot.tree.command(name="vc_list", description="VC管理対象一覧を表示する")
-async def vc_list(interaction: discord.Interaction):
-    if not config["vc_targets"]:
-        await interaction.response.send_message("管理対象のVCはありません。", ephemeral=True)
-        return
-
-    lines = []
-    for t in config["vc_targets"]:
-        lines.append(
-            f"VC ID: {t['vc_id']} / chat_name: {t['chat_name']} / start_message: {t['start_message']}"
-        )
-    msg = "\n".join(lines)
-
-    await interaction.response.send_message(f"管理対象VC一覧:\n{msg}", ephemeral=True)
-
-
-# =========================
-# VC開始メッセージ変更
-# =========================
-
-@bot.tree.command(name="vc_set_start_message", description="VCチャットに送る開始メッセージを変更する")
-@app_commands.describe(vc_name="対象VCの名前", message="開始時にVCチャットへ送るメッセージ")
-async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, message: str):
-    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
-    if not vc:
-        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
-        return
-
-    target = get_vc_target(vc.id)
-    if not target:
-        await interaction.response.send_message("そのVCは管理対象に登録されていません。", ephemeral=True)
-        return
-
-    target["start_message"] = message
-    save_config(config)
-
-    await interaction.response.send_message(
-        f"VC「{vc.name}」の開始メッセージを変更しました:\n{message}",
-        ephemeral=True
-    )
-
-
-
-# =========================
-# VCログチャンネル設定
-# =========================
-
-@bot.tree.command(name="set_vc_log_channel", description="VCログを送るチャンネルを設定する")
-@app_commands.describe(channel_id="ログチャンネルのID")
-async def set_vc_log_channel(interaction: discord.Interaction, channel_id: str):
-    ch_id_int = int(channel_id)
-    channel = interaction.guild.get_channel(ch_id_int)
-
-    if not isinstance(channel, discord.TextChannel):
-        await interaction.response.send_message("そのIDのテキストチャンネルが見つかりません。", ephemeral=True)
-        return
-
-    config["log_channel_id"] = ch_id_int
-    save_config(config)
-
-    await interaction.response.send_message(
-        f"ログチャンネルを {channel.mention} に設定しました。",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="vc_log_channel_status", description="現在のログチャンネル設定を確認する")
-async def vc_log_channel_status(interaction: discord.Interaction):
-    log_ch = get_log_channel(interaction.guild)
-
-    if not log_ch:
-        await interaction.response.send_message("ログチャンネルは未設定です。", ephemeral=True)
-    else:
-        await interaction.response.send_message(
-            f"現在のログチャンネル: {log_ch.mention} (ID: {log_ch.id})",
-            ephemeral=True
-        )
 # =========================
 # VC名変更対象（複数VC対応）
 # =========================
@@ -460,8 +383,7 @@ async def vc_rename(interaction: discord.Interaction, vc_id: str, new_name: str)
     # VCチャット通知（管理対象VCのみ）
     target = get_vc_target(vc_id_int)
     if target:
-       if human_count(after.channel) == 1:
-          chat = await ensure_chat(...)
+        chat = await ensure_chat(interaction.guild, target["chat_name"], vc.category)
         await asyncio.sleep(2)
         await chat.send(f"VC名を **{new_name}** に変更しました。")
 
@@ -491,9 +413,6 @@ async def vc_add_game_target(interaction: discord.Interaction, vc_name: str):
     )
 
 
-
-
-
 @bot.tree.command(name="vc_remove_game_target", description="ゲーム選択ボタン対象VCを削除する")
 @app_commands.describe(vc_name="対象VCの名前")
 async def vc_remove_game_target(interaction: discord.Interaction, vc_name: str):
@@ -514,13 +433,6 @@ async def vc_remove_game_target(interaction: discord.Interaction, vc_name: str):
         ephemeral=True
     )
 
-    save_config(config)
-
-    await interaction.response.send_message(
-        f"ゲーム選択ボタン対象から VC {vc_id_int} を削除しました。",
-        ephemeral=True
-    )
-
 
 @bot.tree.command(name="vc_game_targets", description="ゲーム選択ボタン対象VC一覧を表示する")
 async def vc_game_targets(interaction: discord.Interaction):
@@ -534,6 +446,8 @@ async def vc_game_targets(interaction: discord.Interaction):
     msg = "\n".join(lines)
 
     await interaction.response.send_message(f"ゲーム選択ボタン対象VC一覧:\n{msg}", ephemeral=True)
+
+
 # =========================
 # VC入退室イベント
 # =========================
@@ -617,19 +531,20 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             if not before.channel or before.channel.id != after.channel.id:
                 games = await load_games(bot)
 
-                chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
-                if not chat:
-                    chat = await guild.create_text_channel(
-                        target["chat_name"],
-                        category=after.channel.category
+                target = get_vc_target(after.channel.id)
+                if target:
+                    chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
+                    if not chat:
+                        chat = await guild.create_text_channel(
+                            target["chat_name"],
+                            category=after.channel.category
+                        )
+
+                    await asyncio.sleep(2)
+                    await chat.send(
+                        f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
+                        view=GameSelect(games)
                     )
-
-                await asyncio.sleep(2)
-                await chat.send(
-                    f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
-                    view=GameSelect(games)
-                )
-
     # =========================
     # ④ VC管理：退出処理
     # =========================
@@ -703,6 +618,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                 base = extract_base_name(vc.name)
                 if vc.name != base:
                     await vc.edit(name=base)
+
 
 # =========================
 # 30日アクティブロールチェック（毎日1回）
