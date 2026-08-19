@@ -354,7 +354,8 @@ async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, m
 # VCログチャンネル設定
 # =========================
 
-@bot.tree.command(name="set_vc_log_channel", description="VCログを送るチャンネルを設定する")
+@bot.tree.command(name="vc_set_log_channel", description="VCログを送るチャンネルを設定する")
+
 @app_commands.describe(channel_id="ログチャンネルのID")
 async def set_vc_log_channel(interaction: discord.Interaction, channel_id: str):
     ch_id_int = int(channel_id)
