@@ -676,8 +676,10 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                         target["log_start_message_id"] = None
                         save_config(config)
 
-                # VCチャット削除
-                await delete_chat(guild, target["chat_name"])
+                  # VCチャット削除
+                  await asyncio.sleep(2)
+                  await delete_chat(guild, target["chat_name"])
+
 
                 # セッションリセット
                 vc_sessions[before.channel.id] = {
