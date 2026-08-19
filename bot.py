@@ -560,73 +560,75 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                 await member.add_roles(role)
                 print(f"{member.display_name} にアクティブロールを付与した")
 
-# =========================
-# ② VC管理：入室処理
-# =========================
-if after.channel:
-    target = get_vc_target(after.channel.id)
-    if target:
-        session = ensure_session(after.channel.id)
+    # =========================
+    # ② VC管理：入室処理
+    # =========================
+    if after.channel:
+        target = get_vc_target(after.channel.id)
+        if target:
+            session = ensure_session(after.channel.id)
 
-        # VCチャット生成（人間1人目のときだけ）
-        if human_count(after.channel) == 1:
-            chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
-            if not chat:
-                chat = await guild.create_text_channel(
+            # VCチャット生成（人間1人目のときだけ）
+            if human_count(after.channel) == 1:
+                chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
+                if not chat:
+                    chat = await guild.create_text_channel(
+                        target["chat_name"],
+                        category=after.channel.category
+                    )
+            else:
+                chat = await ensure_chat(
+                    guild,
                     target["chat_name"],
-                    category=after.channel.category
-                )
-        else:
-            chat = await ensure_chat(
-                guild,
-                target["chat_name"],
-                after.channel.category
-            )
-
-        join_time = datetime.now()
-        await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
-
-        # セッション記録
-        if member.id not in session["members"]:
-            session["members"][member.id] = {"join": join_time, "leave": None}
-        else:
-            session["members"][member.id]["join"] = join_time
-            session["members"][member.id]["leave"] = None
-
-        # VC開始（人間1人目）
-        if human_count(after.channel) == 1:
-            session["start_time"] = join_time
-
-            start_msg = target.get("start_message", "通話開始！")
-            await chat.send(start_msg)
-
-            # ログチャンネルへ開始ログ
-            log_ch = get_log_channel(guild)
-            if log_ch:
-                msg = await log_ch.send(
-                    f"[VC開始] VC: {after.channel.name} (ID: {after.channel.id})\n"
-                    f"開始時刻: {format_dt(join_time)}"
-                )
-                target["log_start_message_id"] = msg.id
-                save_config(config)
-
-    # ③ ゲーム選択ボタン：対象VC入室時
-    if after.channel.id in config.get("game_targets", []):
-        if not before.channel or before.channel.id != after.channel.id:
-            games = await load_games(bot)
-
-            chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
-            if not chat:
-                chat = await guild.create_text_channel(
-                    target["chat_name"],
-                    category=after.channel.category
+                    after.channel.category
                 )
 
-            await asyncio.sleep(2)
-            await chat.send(
-                f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
-                view=GameSelect(games)
-            )
+            join_time = datetime.now()
+            await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
+
+            # セッション記録
+            if member.id not in session["members"]:
+                session["members"][member.id] = {"join": join_time, "leave": None}
+            else:
+                session["members"][member.id]["join"] = join_time
+                session["members"][member.id]["leave"] = None
+
+            # VC開始（人間1人目）
+            if human_count(after.channel) == 1:
+                session["start_time"] = join_time
+
+                start_msg = target.get("start_message", "通話開始！")
+                await chat.send(start_msg)
+
+                # ログチャンネルへ開始ログ
+                log_ch = get_log_channel(guild)
+                if log_ch:
+                    msg = await log_ch.send(
+                        f"[VC開始] VC: {after.channel.name} (ID: {after.channel.id})\n"
+                        f"開始時刻: {format_dt(join_time)}"
+                    )
+                    target["log_start_message_id"] = msg.id
+                    save_config(config)
+
+        # =========================
+        # ③ ゲーム選択ボタン：対象VC入室時
+        # =========================
+        if after.channel.id in config.get("game_targets", []):
+            if not before.channel or before.channel.id != after.channel.id:
+                games = await load_games(bot)
+
+                chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
+                if not chat:
+                    chat = await guild.create_text_channel(
+                        target["chat_name"],
+                        category=after.channel.category
+                    )
+
+                await asyncio.sleep(2)
+                await chat.send(
+                    f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
+                    view=GameSelect(games)
+                )
 
     # =========================
     # ④ VC管理：退出処理
@@ -635,6 +637,7 @@ if after.channel:
         target = get_vc_target(before.channel.id)
         if target:
             session = ensure_session(before.channel.id)
+
             chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
 
             leave_time = datetime.now()
@@ -646,7 +649,7 @@ if after.channel:
             else:
                 session["members"][member.id] = {"join": None, "leave": leave_time}
 
-            # VC終了（人間0人）
+            # VC終了（誰もいない）
             if len(before.channel.members) == 0:
                 start_time = session.get("start_time")
                 end_time = leave_time
@@ -692,7 +695,7 @@ if after.channel:
                 }
 
         # =========================
-        # ⑤ ゲーム選択ボタン：退出時は必ずベース名に戻す（A案）
+        # ⑤ ゲーム選択ボタン：退出時はベース名に戻す
         # =========================
         if before.channel.id in config.get("game_targets", []):
             if human_count(before.channel) == 0:
