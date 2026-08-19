@@ -308,6 +308,81 @@ async def vc_remove(interaction: discord.Interaction, vc_name: str):
         await interaction.response.send_message("そのVCは登録されていません。", ephemeral=True)
     else:
         await interaction.response.send_message(f"VC「{vc.name}」を管理対象から削除しました。", ephemeral=True)
+# =========================
+# VC管理対象一覧
+# =========================
+
+@bot.tree.command(name="vc_list", description="VC管理対象一覧を表示する")
+async def vc_list(interaction: discord.Interaction):
+    if not config["vc_targets"]:
+        await interaction.response.send_message("管理対象のVCはありません。", ephemeral=True)
+        return
+
+    lines = []
+    for t in config["vc_targets"]:
+        lines.append(
+            f"VC ID: {t['vc_id']} / chat_name: {t['chat_name']} / start_message: {t['start_message']}"
+        )
+    msg = "\n".join(lines)
+
+    await interaction.response.send_message(f"管理対象VC一覧:\n{msg}", ephemeral=True)
+# =========================
+# VC開始メッセージ変更
+# =========================
+
+@bot.tree.command(name="vc_set_start_message", description="VCチャットに送る開始メッセージを変更する")
+@app_commands.describe(vc_name="対象VCの名前", message="開始時にVCチャットへ送るメッセージ")
+async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, message: str):
+    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if not vc:
+        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
+        return
+
+    target = get_vc_target(vc.id)
+    if not target:
+        await interaction.response.send_message("そのVCは管理対象に登録されていません。", ephemeral=True)
+        return
+
+    target["start_message"] = message
+    save_config(config)
+
+    await interaction.response.send_message(
+        f"VC「{vc.name}」の開始メッセージを変更しました:\n{message}",
+        ephemeral=True
+    )
+# =========================
+# VCログチャンネル設定
+# =========================
+
+@bot.tree.command(name="set_vc_log_channel", description="VCログを送るチャンネルを設定する")
+@app_commands.describe(channel_id="ログチャンネルのID")
+async def set_vc_log_channel(interaction: discord.Interaction, channel_id: str):
+    ch_id_int = int(channel_id)
+    channel = interaction.guild.get_channel(ch_id_int)
+
+    if not isinstance(channel, discord.TextChannel):
+        await interaction.response.send_message("そのIDのテキストチャンネルが見つかりません。", ephemeral=True)
+        return
+
+    config["log_channel_id"] = ch_id_int
+    save_config(config)
+
+    await interaction.response.send_message(
+        f"ログチャンネルを {channel.mention} に設定しました。",
+        ephemeral=True
+    )
+    
+@bot.tree.command(name="vc_log_channel_status", description="現在のログチャンネル設定を確認する")
+async def vc_log_channel_status(interaction: discord.Interaction):
+    log_ch = get_log_channel(interaction.guild)
+
+    if not log_ch:
+        await interaction.response.send_message("ログチャンネルは未設定です。", ephemeral=True)
+    else:
+        await interaction.response.send_message(
+            f"現在のログチャンネル: {log_ch.mention} (ID: {log_ch.id})",
+            ephemeral=True
+        )
 
 # =========================
 # VC名変更対象（複数VC対応）
