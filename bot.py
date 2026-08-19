@@ -571,7 +571,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         # =========================
         # ③ ゲーム選択ボタン：対象VC入室時
         # =========================
-        if after.channel.id in config.get("game_targets", []):
+        if after.channel.name in config.get("game_targets", []):
             if not before.channel or before.channel.id != after.channel.id:
                 games = await load_games(bot)
                 notice_ch_id = game_config.get("notice_channel_id")
@@ -650,7 +650,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         # =========================
         # ⑤ ゲーム選択ボタン：退出時は必ずベース名に戻す（A案）
         # =========================
-        if before.channel.id in config.get("game_targets", []):
+        if before.channel.name in config.get("game_targets", []):
             if human_count(before.channel) == 0:
                 vc = before.channel
                 base = extract_base_name(vc.name)
