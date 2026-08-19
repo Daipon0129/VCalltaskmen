@@ -573,21 +573,18 @@ else:
                     target["log_start_message_id"] = msg.id
                     save_config(config)
 
-        # =========================
         # ③ ゲーム選択ボタン：対象VC入室時
-        # =========================
         if after.channel.id in config.get("game_targets", []):
             if not before.channel or before.channel.id != after.channel.id:
                 games = await load_games(bot)
-               chat_name = f"{after.channel.name}-chat"
-chat = await ensure_chat(guild, chat_name, after.channel.category)
-
+                chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
 
                 await asyncio.sleep(2)
                 await chat.send(
                     f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
                     view=GameSelect(games)
                 )
+
 
     # =========================
     # ④ VC管理：退出処理
