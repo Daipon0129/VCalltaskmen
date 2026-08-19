@@ -71,8 +71,6 @@ def load_game_config():
     cfg = load_json(GAME_CONFIG_FILE)
     if "game_list_channel_id" not in cfg:
         cfg["game_list_channel_id"] = None
-    if "notice_channel_id" not in cfg:
-        cfg["notice_channel_id"] = None
     return cfg
 
 
@@ -81,6 +79,9 @@ def save_game_config(cfg):
 
 
 game_config = load_game_config()
+
+if "notice_channel_id" in cfg:
+    del cfg["notice_channel_id"]
 
 
 # =========================
@@ -210,7 +211,6 @@ async def change_vc_name_by_game(interaction: discord.Interaction, title: str):
 # ゲーム関連チャンネル設定コマンド
 # =========================
 
-@bot.tree.command(name="set_game_list_channel", description="ゲームリストを読み取るチャンネルを設定する")
 @app_commands.describe(channel_id="ゲームリストチャンネルのID")
 async def set_game_list_channel(interaction: discord.Interaction, channel_id: str):
     ch_id_int = int(channel_id)
@@ -251,11 +251,9 @@ async def set_notice_channel(interaction: discord.Interaction, channel_id: str):
 @bot.tree.command(name="game_channel_status", description="ゲーム関連チャンネル設定を確認する")
 async def game_channel_status(interaction: discord.Interaction):
     gl = game_config.get("game_list_channel_id")
-    nt = game_config.get("notice_channel_id")
 
     msg = "**ゲーム関連チャンネル設定**\n"
     msg += f"- ゲームリスト: {gl if gl else '未設定'}\n"
-    msg += f"- 通知チャンネル: {nt if nt else '未設定'}"
 
     await interaction.response.send_message(msg, ephemeral=True)
 # =========================
@@ -571,17 +569,16 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         # =========================
         # ③ ゲーム選択ボタン：対象VC入室時
         # =========================
-        if after.channel.name in config.get("game_targets", []):
+       if after.channel.id in config.get("game_targets", []):
             if not before.channel or before.channel.id != after.channel.id:
                 games = await load_games(bot)
-                notice_ch_id = game_config.get("notice_channel_id")
-                notice_ch = guild.get_channel(notice_ch_id)
+                chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
+await asyncio.sleep(2)
+await chat.send(
+    f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
+    view=GameSelect(games),
+)
 
-                if isinstance(notice_ch, discord.TextChannel) and games:
-                    await notice_ch.send(
-                        f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
-                        view=GameSelect(games),
-                        delete_after=60
                     )
 
     # =========================
