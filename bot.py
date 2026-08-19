@@ -460,7 +460,8 @@ async def vc_rename(interaction: discord.Interaction, vc_id: str, new_name: str)
     # VCチャット通知（管理対象VCのみ）
     target = get_vc_target(vc_id_int)
     if target:
-        chat = await ensure_chat(interaction.guild, target["chat_name"], vc.category)
+       if human_count(after.channel) == 1:
+          chat = await ensure_chat(...)
         await asyncio.sleep(2)
         await chat.send(f"VC名を **{new_name}** に変更しました。")
 
@@ -569,7 +570,10 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
             # VCチャット生成（人間1人目のときだけ）
             if human_count(after.channel) == 1:
-                chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
+               chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
+                   if not chat:
+                       chat = await guild.create_text_channel(target["chat_name"], category=after.channel.category)
+
             else:
                 chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
 
@@ -632,7 +636,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                 session["members"][member.id] = {"join": None, "leave": leave_time}
 
             # VC終了（人間0人）
-            if human_count(before.channel) == 0:
+            if len(before.channel.members) == 0:
                 start_time = session.get("start_time")
                 end_time = leave_time
 
