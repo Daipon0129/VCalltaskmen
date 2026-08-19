@@ -531,7 +531,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                 await member.add_roles(role)
                 print(f"{member.display_name} にアクティブロールを付与した")
 
-    # =========================
+     # =========================
     # ② VC管理：入室処理
     # =========================
     if after.channel:
@@ -539,14 +539,14 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         if target:
             session = ensure_session(after.channel.id)
 
-        # VCチャット生成（人間1人目のときだけ）
-        if human_count(after.channel) == 1:
-            chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
-        else:
-            chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
+            # VCチャット生成（人間1人目のときだけ）
+            if human_count(after.channel) == 1:
+                chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
+            else:
+                chat = await ensure_chat(guild, target["chat_name"], after.channel.category)
 
-        join_time = datetime.now()
-        await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
+            join_time = datetime.now()
+            await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
 
             # セッション記録
             if member.id not in session["members"]:
