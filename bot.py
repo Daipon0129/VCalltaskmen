@@ -237,18 +237,18 @@ async def set_game_list_channel(interaction: discord.Interaction, channel_id: st
 async def set_notice_channel(interaction: discord.Interaction, channel_name: str):
     channel = discord.utils.get(interaction.guild.text_channels, name=channel_name)
 
-
-    if not isinstance(channel, discord.TextChannel):
-        await interaction.response.send_message("そのIDのテキストチャンネルが見つからないよ。", ephemeral=True)
+    if not channel or not isinstance(channel, discord.TextChannel):
+        await interaction.response.send_message("その名前のテキストチャンネルが見つからないよ。", ephemeral=True)
         return
 
-    game_config["notice_channel_id"] = ch_id_int
+    game_config["notice_channel_id"] = channel.id
     save_game_config(game_config)
 
     await interaction.response.send_message(
         f"通知チャンネルを {channel.mention} に設定したよ！",
         ephemeral=True
     )
+
 
 
 @bot.tree.command(name="game_channel_status", description="ゲーム関連チャンネル設定を確認する")
@@ -267,12 +267,16 @@ async def game_channel_status(interaction: discord.Interaction):
 @app_commands.describe(vc_name="対象VCの名前", chat_name="生成するチャット名")
 async def vc_add(interaction: discord.Interaction, vc_name: str, chat_name: str):
     vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if not vc:
+        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
+        return
+
     if get_vc_target(vc.id):
         await interaction.response.send_message("そのVCはすでに登録されています。", ephemeral=True)
         return
 
     config["vc_targets"].append({
-        "vc_id": vc_id_int,
+        "vc_id": vc.id,
         "chat_name": chat_name,
         "start_message": "通話開始！",
         "log_start_message_id": None
@@ -280,25 +284,29 @@ async def vc_add(interaction: discord.Interaction, vc_name: str, chat_name: str)
     save_config(config)
 
     await interaction.response.send_message(
-        f"VC {vc_id_int} を管理対象として追加しました。\nチャット名: {chat_name}",
+        f"VC「{vc.name}」を管理対象として追加しました。\nチャット名: {chat_name}",
         ephemeral=True
     )
 
 
 @bot.tree.command(name="vc_remove", description="VC管理対象を削除する")
-@app_commands.describe(vc_id="対象のVCのID")
-async def vc_remove(interaction: discord.Interaction, vc_id: str):
-    vc_id_int = int(vc_id)
+@app_commands.describe(vc_name="対象VCの名前")
+async def vc_remove(interaction: discord.Interaction, vc_name: str):
+    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if not vc:
+        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
+        return
 
     before_len = len(config["vc_targets"])
-    config["vc_targets"] = [t for t in config["vc_targets"] if t["vc_id"] != vc_id_int]
+    config["vc_targets"] = [t for t in config["vc_targets"] if t["vc_id"] != vc.id]
     after_len = len(config["vc_targets"])
     save_config(config)
 
     if before_len == after_len:
         await interaction.response.send_message("そのVCは登録されていません。", ephemeral=True)
     else:
-        await interaction.response.send_message(f"VC {vc_id_int} を管理対象から削除しました。", ephemeral=True)
+        await interaction.response.send_message(f"VC「{vc.name}」を管理対象から削除しました。", ephemeral=True)
+
 
 
 @bot.tree.command(name="vc_list", description="VC管理対象一覧を表示する")
@@ -325,9 +333,11 @@ async def vc_list(interaction: discord.Interaction):
 @app_commands.describe(vc_name="対象VCの名前", message="開始時にVCチャットへ送るメッセージ")
 async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, message: str):
     vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if not vc:
+        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
+        return
+
     target = get_vc_target(vc.id)
-
-
     if not target:
         await interaction.response.send_message("そのVCは管理対象に登録されていません。", ephemeral=True)
         return
@@ -336,9 +346,10 @@ async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, m
     save_config(config)
 
     await interaction.response.send_message(
-        f"VC {vc_id_int} の開始メッセージを変更しました:\n{message}",
+        f"VC「{vc.name}」の開始メッセージを変更しました:\n{message}",
         ephemeral=True
     )
+
 
 
 # =========================
@@ -459,21 +470,27 @@ async def vc_rename(interaction: discord.Interaction, vc_id: str, new_name: str)
 # =========================
 
 @bot.tree.command(name="vc_add_game_target", description="ゲーム選択ボタン対象VCを追加する")
-@app_commands.describe(vc_id="対象VCのID")
-async def vc_add_game_target(interaction: discord.Interaction, vc_id: str):
-    vc_id_int = int(vc_id)
+@app_commands.describe(vc_name="対象VCの名前")
+async def vc_add_game_target(interaction: discord.Interaction, vc_name: str):
+    vc = discord.utils.get(interaction.guild.voice_channels, name=vc_name)
+    if not vc:
+        await interaction.response.send_message("その名前のVCが見つかりません。", ephemeral=True)
+        return
 
-    if vc_id_int in config.get("game_targets", []):
+    if vc.id in config.get("game_targets", []):
         await interaction.response.send_message("そのVCはすでに登録されています。", ephemeral=True)
         return
 
-    config["game_targets"].append(vc_id_int)
+    config["game_targets"].append(vc.id)
     save_config(config)
 
     await interaction.response.send_message(
-        f"ゲーム選択ボタン対象として VC {vc_id_int} を追加しました。",
+        f"ゲーム選択ボタン対象として VC「{vc.name}」を追加しました。",
         ephemeral=True
     )
+
+
+
 
 
 @bot.tree.command(name="vc_remove_game_target", description="ゲーム選択ボタン対象VCを削除する")
@@ -652,12 +669,13 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
         # =========================
         # ⑤ ゲーム選択ボタン：退出時は必ずベース名に戻す（A案）
         # =========================
-        if before.channel.name in config.get("game_targets", []):
+        if before.channel.id in config.get("game_targets", []):
             if human_count(before.channel) == 0:
                 vc = before.channel
                 base = extract_base_name(vc.name)
                 if vc.name != base:
                     await vc.edit(name=base)
+
 # =========================
 # 30日アクティブロールチェック（毎日1回）
 # =========================
