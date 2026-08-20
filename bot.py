@@ -20,6 +20,7 @@ intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 vc_sessions = {}  # VCごとの通話セッション情報
+vc_watch_tasks = {}
 
 
 # =========================
@@ -575,7 +576,14 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
             join_time = datetime.now()
             await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
+           # VC監視タスク開始（退出イベントが来なくてもVC終了を検知）
+        if after.channel.id not in vc_watch_tasks:
+                vc_watch_tasks[after.channel.id] = asyncio.create_task(
+                        watch_vc_end(member.guild, after.channel, target)
+                )
 
+
+            
             # セッション記録
             if member.id not in session["members"]:
                 session["members"][member.id] = {"join": join_time, "leave": None}
