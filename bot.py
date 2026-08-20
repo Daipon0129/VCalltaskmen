@@ -622,26 +622,36 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                         view=GameSelect(games)
                     )
         # ================================
-        # ④ VC管理：退出処理
+        # ④ VC管理：退出処理（遅延 + 自前カウント方式）
         # ================================
-        if before.channel:
+        if before.channel and after.channel is None:
             target = get_vc_target(before.channel.id)
             if target:
                 session = ensure_session(before.channel.id)
 
-                chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
+                # 自前カウント（退出時は -1）
+                if "count" not in session:
+                    session["count"] = 0
+                session["count"] -= 1
 
-                leave_time = datetime.now()
-                await chat.send(f"{member.mention} が退出しました（{format_dt(leave_time)}）")
+                # 遅延してから終了判定（Discord遅延対策）
+                await asyncio.sleep(1)
 
-                # セッション記録
-                if member.id in session["members"]:
-                    session["members"][member.id]["leave"] = leave_time
-                else:
-                    session["members"][member.id] = {"join": None, "leave": leave_time}
+                # VC終了判定（自前カウント + Discordのmembers両方見る）
+                is_empty = session["count"] <= 0 or len(before.channel.members) == 0
 
-                # VC終了（誰もいない）
-                if len(before.channel.members) == 0:
+                if is_empty:
+                    chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
+
+                    leave_time = datetime.now()
+                    await chat.send(f"{member.mention} が退出しました（{format_dt(leave_time)}）")
+
+                    # セッション記録
+                    if member.id in session["members"]:
+                        session["members"][member.id]["leave"] = leave_time
+                    else:
+                        session["members"][member.id] = {"join": None, "leave": leave_time}
+
                     start_time = session.get("start_time")
                     end_time = leave_time
 
@@ -677,19 +687,22 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                             save_config(config)
 
                     # VCチャット削除
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(1)
                     await delete_chat(guild, target["chat_name"])
 
                     # セッションリセット
                     vc_sessions[before.channel.id] = {
                         "start_time": None,
-                        "members": {}
+                        "members": {},
+                        "count": 0
                     }
 
             # ================================
             # ⑤ ゲーム選択ボタン：退出時はベース名に戻す
             # ================================
             if before.channel.id in config.get("game_targets", []):
+                # 遅延してから確認（Discord遅延対策）
+                await asyncio.sleep(1)
                 if human_count(before.channel) == 0:
                     vc = before.channel
                     base = extract_base_name(vc.name)
