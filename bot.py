@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
+from datetime import datetime, timedelta, timezone
+JST = timezone(timedelta(hours=9))
+
 
 # ====== Botトークン（Railway環境変数） ======
 TOKEN = os.getenv("TOKEN")
@@ -501,7 +504,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
     # =========================
     if after.channel:
         active_data = load_json(DATA_FILE)
-        today = datetime.now().strftime("%Y-%m-%d")
+        today = datetime.now(JST).strftime("%Y-%m-%d")
         active_data[str(member.id)] = today
         save_json(DATA_FILE, active_data)
 
@@ -537,7 +540,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                     after.channel.category
                 )
 
-            join_time = datetime.now()
+            join_time = datetime.now(JST)
             await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
 
             # セッション記録
@@ -614,7 +617,7 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
             if is_empty:
                 chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
 
-                leave_time = datetime.now()
+                leave_time = datetime.now(JST)
                 await chat.send(f"{member.mention} が退出しました（{format_dt(leave_time)}）")
 
                 # セッション記録
@@ -720,7 +723,7 @@ async def handle_vc_end(guild, vc, target):
 async def check_inactive_users():
     role_data = load_json(ROLE_FILE)
     active_data = load_json(DATA_FILE)
-    now = datetime.now()
+    now = datetime.now(JST)
 
     for guild in bot.guilds:
         guild_role_info = role_data.get(str(guild.id))
