@@ -676,7 +676,7 @@ if before.channel:
                     target["log_start_message_id"] = None
                     save_config(config)
 
-            # VCチャット削除 ←ここが重要（正しいインデント）
+            # VCチャット削除
             await asyncio.sleep(2)
             await delete_chat(guild, target["chat_name"])
 
@@ -695,7 +695,6 @@ if before.channel:
             base = extract_base_name(vc.name)
             if vc.name != base:
                 await vc.edit(name=base)
-
 
 # =========================
 # 30日アクティブロールチェック（毎日1回）
