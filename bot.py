@@ -722,5 +722,3 @@ async def on_ready():
 
 check_inactive_users.start()
 bot.run(TOKEN)
-
-
