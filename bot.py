@@ -744,6 +744,10 @@ async def handle_vc_end(guild, vc, target):
                     if vc.name != base:
                         await vc.edit(name=base)
 
+# =========================
+# VC監視タスク（退出イベントが来なくても VC 終了を検知）
+# =========================
+
 async def watch_vc_end(guild, vc, target):
     await asyncio.sleep(1)
     while True:
@@ -770,6 +774,7 @@ async def handle_vc_end(guild, vc, target):
         "members": {},
         "count": 0
     }
+
 
 
 # =========================
