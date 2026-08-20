@@ -744,6 +744,34 @@ async def handle_vc_end(guild, vc, target):
                     if vc.name != base:
                         await vc.edit(name=base)
 
+async def watch_vc_end(guild, vc, target):
+    await asyncio.sleep(1)
+    while True:
+        await asyncio.sleep(1)
+        if len(vc.members) == 0:
+            await handle_vc_end(guild, vc, target)
+            vc_watch_tasks.pop(vc.id, None)
+            break
+
+
+async def handle_vc_end(guild, vc, target):
+    chat = await ensure_chat(guild, target["chat_name"], vc.category)
+    await chat.send("VCが終了しました")
+
+    base = extract_base_name(vc.name)
+    if vc.name != base:
+        await vc.edit(name=base)
+
+    await asyncio.sleep(1)
+    await delete_chat(guild, target["chat_name"])
+
+    vc_sessions[vc.id] = {
+        "start_time": None,
+        "members": {},
+        "count": 0
+    }
+
+
 # =========================
 # 30日アクティブロールチェック（毎日1回）
 # =========================
