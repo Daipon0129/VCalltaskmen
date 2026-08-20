@@ -621,80 +621,80 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
                         f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
                         view=GameSelect(games)
                     )
-# =========================
-# ④ VC管理：退出処理
-# =========================
-if before.channel:
-    target = get_vc_target(before.channel.id)
-    if target:
-        session = ensure_session(before.channel.id)
+        # ================================
+        # ④ VC管理：退出処理
+        # ================================
+        if before.channel:
+            target = get_vc_target(before.channel.id)
+            if target:
+                session = ensure_session(before.channel.id)
 
-        chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
+                chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
 
-        leave_time = datetime.now()
-        await chat.send(f"{member.mention} が退出しました ({format_dt(leave_time)})")
+                leave_time = datetime.now()
+                await chat.send(f"{member.mention} が退出しました（{format_dt(leave_time)}）")
 
-        # セッション記録
-        if member.id in session["members"]:
-            session["members"][member.id]["leave"] = leave_time
-        else:
-            session["members"][member.id] = {"join": None, "leave": leave_time}
+                # セッション記録
+                if member.id in session["members"]:
+                    session["members"][member.id]["leave"] = leave_time
+                else:
+                    session["members"][member.id] = {"join": None, "leave": leave_time}
 
-        # VC終了（誰もいない）
-        if len(before.channel.members) == 0:
-            start_time = session.get("start_time")
-            end_time = leave_time
+                # VC終了（誰もいない）
+                if len(before.channel.members) == 0:
+                    start_time = session.get("start_time")
+                    end_time = leave_time
 
-            # ログチャンネルへ終了ログ
-            log_ch = get_log_channel(guild)
-            if log_ch and start_time:
-                lines = []
-                for uid, times in session["members"].items():
-                    user = guild.get_member(uid)
-                    name = user.display_name if user else f"ID:{uid}"
-                    j = times["join"]
-                    l = times["leave"] or end_time
-                    lines.append(f"{name}: {format_dt(j) if j else '不明'} ～ {format_dt(l)}")
+                    # ログチャンネルへ終了ログ
+                    log_ch = get_log_channel(guild)
+                    if log_ch and start_time:
+                        lines = []
+                        for uid, times in session["members"].items():
+                            user = guild.get_member(uid)
+                            name = user.display_name if user else f"ID:{uid}"
+                            j = times["join"]
+                            l = times["leave"] or end_time
+                            lines.append(f"{name}: {format_dt(j) if j else '不明'} ～ {format_dt(l)}")
 
-                participants = "\n".join(lines) if lines else "参加者情報なし"
+                        participants = "\n".join(lines) if lines else "参加者情報なし"
 
-                await log_ch.send(
-                    f"[VC終了] VC: {before.channel.name} (ID: {before.channel.id})\n"
-                    f"開始: {format_dt(start_time)}\n"
-                    f"終了: {format_dt(end_time)}\n"
-                    f"参加者:\n{participants}"
-                )
+                        await log_ch.send(
+                            f"[VC終了] VC: {before.channel.name} (ID: {before.channel.id})\n"
+                            f"開始: {format_dt(start_time)}\n"
+                            f"終了: {format_dt(end_time)}\n"
+                            f"参加者:\n{participants}"
+                        )
 
-                # 開始ログ削除
-                start_msg_id = target.get("log_start_message_id")
-                if start_msg_id:
-                    try:
-                        start_msg = await log_ch.fetch_message(start_msg_id)
-                        await start_msg.delete()
-                    except Exception:
-                        pass
-                    target["log_start_message_id"] = None
-                    save_config(config)
+                        # 開始ログ削除
+                        start_msg_id = target.get("log_start_message_id")
+                        if start_msg_id:
+                            try:
+                                start_msg = await log_ch.fetch_message(start_msg_id)
+                                await start_msg.delete()
+                            except Exception:
+                                pass
+                            target["log_start_message_id"] = None
+                            save_config(config)
 
-            # VCチャット削除
-            await asyncio.sleep(2)
-            await delete_chat(guild, target["chat_name"])
+                    # VCチャット削除
+                    await asyncio.sleep(2)
+                    await delete_chat(guild, target["chat_name"])
 
-            # セッションリセット
-            vc_sessions[before.channel.id] = {
-                "start_time": None,
-                "members": {}
-            }
+                    # セッションリセット
+                    vc_sessions[before.channel.id] = {
+                        "start_time": None,
+                        "members": {}
+                    }
 
-    # =========================
-    # ⑤ ゲーム選択ボタン：退出時はベース名に戻す
-    # =========================
-    if before.channel.id in config.get("game_targets", []):
-        if human_count(before.channel) == 0:
-            vc = before.channel
-            base = extract_base_name(vc.name)
-            if vc.name != base:
-                await vc.edit(name=base)
+            # ================================
+            # ⑤ ゲーム選択ボタン：退出時はベース名に戻す
+            # ================================
+            if before.channel.id in config.get("game_targets", []):
+                if human_count(before.channel) == 0:
+                    vc = before.channel
+                    base = extract_base_name(vc.name)
+                    if vc.name != base:
+                        await vc.edit(name=base)
 
 # =========================
 # 30日アクティブロールチェック（毎日1回）
