@@ -448,6 +448,47 @@ async def vc_game_targets(interaction: discord.Interaction):
 
     await interaction.response.send_message(f"ゲーム選択ボタン対象VC一覧:\n{msg}", ephemeral=True)
 # =========================
+# ゲームリスト設定コマンド
+# =========================
+
+@bot.tree.command(name="set_game_list_channel", description="ゲームリストを読み取るチャンネルを設定する")
+@app_commands.describe(channel_id="ゲームリストを読み取るチャンネルID")
+async def set_game_list_channel(interaction: discord.Interaction, channel_id: str):
+    ch_id_int = int(channel_id)
+    channel = interaction.guild.get_channel(ch_id_int)
+
+    if not isinstance(channel, discord.TextChannel):
+        await interaction.response.send_message("そのIDのテキストチャンネルが見つかりません。", ephemeral=True)
+        return
+
+    game_config["game_list_channel_id"] = ch_id_int
+    save_game_config(game_config)
+
+    await interaction.response.send_message(
+        f"ゲームリストチャンネルを {channel.mention} に設定しました。",
+        ephemeral=True
+    )
+
+
+@bot.tree.command(name="set_notice_channel", description="ゲーム開始通知を送るチャンネルを設定する")
+@app_commands.describe(channel_id="通知を送るチャンネルID")
+async def set_notice_channel(interaction: discord.Interaction, channel_id: str):
+    ch_id_int = int(channel_id)
+    channel = interaction.guild.get_channel(ch_id_int)
+
+    if not isinstance(channel, discord.TextChannel):
+        await interaction.response.send_message("そのIDのテキストチャンネルが見つかりません。", ephemeral=True)
+        return
+
+    game_config["notice_channel_id"] = ch_id_int
+    save_game_config(game_config)
+
+    await interaction.response.send_message(
+        f"通知チャンネルを {channel.mention} に設定しました。",
+        ephemeral=True
+    )
+
+# =========================
 # VC入退室イベント
 # =========================
 
