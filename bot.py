@@ -532,6 +532,32 @@ async def vc_game_targets(interaction: discord.Interaction):
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     guild = member.guild
+async def watch_vc_end(guild, vc, target):
+    await asyncio.sleep(1)
+    while True:
+        await asyncio.sleep(1)
+        if len(vc.members) == 0:
+            await handle_vc_end(guild, vc, target)
+            vc_watch_tasks.pop(vc.id, None)
+            break
+
+
+async def handle_vc_end(guild, vc, target):
+    chat = await ensure_chat(guild, target["chat_name"], vc.category)
+    await chat.send("VCが終了しました")
+
+    base = extract_base_name(vc.name)
+    if vc.name != base:
+        await vc.edit(name=base)
+
+    await asyncio.sleep(1)
+    await delete_chat(guild, target["chat_name"])
+
+    vc_sessions[vc.id] = {
+        "start_time": None,
+        "members": {},
+        "count": 0
+    }
 
     # =========================
     # ① 30日アクティブロール：VC参加時
@@ -576,11 +602,12 @@ async def on_voice_state_update(member: discord.Member, before: discord.VoiceSta
 
             join_time = datetime.now()
             await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
-           # VC監視タスク開始（退出イベントが来なくてもVC終了を検知）
+        # VC監視タスク開始（退出イベントが来なくてもVC終了を検知）
         if after.channel.id not in vc_watch_tasks:
-                vc_watch_tasks[after.channel.id] = asyncio.create_task(
-                        watch_vc_end(member.guild, after.channel, target)
-                )
+            vc_watch_tasks[after.channel.id] = asyncio.create_task(
+                watch_vc_end(member.guild, after.channel, target)
+            )
+
 
 
             
