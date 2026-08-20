@@ -19,9 +19,8 @@ GAME_CONFIG_FILE = "game_config.json" # ゲームリスト＆通知チャンネ�
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="/", intents=intents)
 
-vc_sessions = {}  # VCごとの通話セッション情報
-vc_watch_tasks = {}
-
+vc_sessions = {}      # VCごとの通話セッション情報
+vc_watch_tasks = {}   # VC監視タスク（VC終了検知）
 
 # =========================
 # 共通JSONユーティリティ
@@ -34,11 +33,9 @@ def load_json(path):
     except:
         return {}
 
-
 def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
-
 
 # =========================
 # VC設定ロード
@@ -56,13 +53,10 @@ def load_config():
         cfg["game_targets"] = []
     return cfg
 
-
 def save_config(config):
     save_json(CONFIG_PATH, config)
 
-
 config = load_config()
-
 
 # =========================
 # ゲーム設定ロード
@@ -76,13 +70,10 @@ def load_game_config():
         cfg["notice_channel_id"] = None
     return cfg
 
-
 def save_game_config(cfg):
     save_json(GAME_CONFIG_FILE, cfg)
 
-
 game_config = load_game_config()
-
 
 # =========================
 # 共通ヘルパー
@@ -91,13 +82,11 @@ game_config = load_game_config()
 def human_count(channel: discord.VoiceChannel) -> int:
     return sum(1 for m in channel.members if not m.bot)
 
-
 async def ensure_chat(guild: discord.Guild, chat_name: str, category: discord.CategoryChannel | None):
     for ch in guild.text_channels:
         if ch.name == chat_name:
             return ch
     return await guild.create_text_channel(chat_name, category=category)
-
 
 async def delete_chat(guild: discord.Guild, chat_name: str):
     for ch in guild.text_channels:
@@ -105,13 +94,11 @@ async def delete_chat(guild: discord.Guild, chat_name: str):
             await ch.delete()
             return
 
-
 def get_vc_target(vc_id: int):
     for t in config["vc_targets"]:
         if t["vc_id"] == vc_id:
             return t
     return None
-
 
 def get_log_channel(guild: discord.Guild) -> discord.TextChannel | None:
     log_id = config.get("log_channel_id")
@@ -119,19 +106,17 @@ def get_log_channel(guild: discord.Guild) -> discord.TextChannel | None:
         return None
     return guild.get_channel(log_id)
 
-
 def ensure_session(vc_id: int):
     if vc_id not in vc_sessions:
         vc_sessions[vc_id] = {
             "start_time": None,
-            "members": {}
+            "members": {},
+            "count": 0
         }
     return vc_sessions[vc_id]
 
-
 def format_dt(dt: datetime) -> str:
     return dt.strftime("%Y-%m-%d %H:%M:%S")
-
 
 def extract_base_name(name: str):
     separators = ["｜", "|", " ", "-", "_"]
@@ -139,7 +124,6 @@ def extract_base_name(name: str):
         if sep in name:
             return name.split(sep)[0]
     return name
-
 
 # =========================
 # ゲームリスト読み取り
@@ -158,7 +142,6 @@ async def load_games(bot: commands.Bot):
     games = [m.content.strip() for m in messages if m.content.strip()]
     return games
 
-
 # =========================
 # ゲーム選択ボタンUI
 # =========================
@@ -171,13 +154,11 @@ class GameButton(discord.ui.Button):
     async def callback(self, interaction: discord.Interaction):
         await change_vc_name_by_game(interaction, self.title)
 
-
 class GameSelect(discord.ui.View):
     def __init__(self, games: list[str]):
         super().__init__(timeout=None)
         for g in games:
             self.add_item(GameButton(g))
-
 
 # =========================
 # ゲーム選択によるVC名変更
@@ -207,61 +188,6 @@ async def change_vc_name_by_game(interaction: discord.Interaction, title: str):
         f"VC名を **{title}** に変更したよ！",
         delete_after=60
     )
-
-
-# =========================
-# ゲーム関連チャンネル設定コマンド
-# =========================
-
-@bot.tree.command(name="set_game_list_channel", description="ゲームリストチャンネルを設定する")
-@app_commands.describe(channel_id="ゲームリストチャンネルのID")
-async def set_game_list_channel(interaction: discord.Interaction, channel_id: str):
-    ch_id_int = int(channel_id)
-    channel = interaction.guild.get_channel(ch_id_int)
-
-    if not isinstance(channel, discord.TextChannel):
-        await interaction.response.send_message("そのIDのテキストチャンネルが見つからないよ。", ephemeral=True)
-        return
-
-    game_config["game_list_channel_id"] = ch_id_int
-    save_game_config(game_config)
-
-    await interaction.response.send_message(
-        f"ゲームリストチャンネルを {channel.mention} に設定したよ！",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="set_notice_channel", description="ゲーム選択ボタンを送る通知チャンネルを設定する")
-@app_commands.describe(channel_name="通知チャンネルの名前")
-async def set_notice_channel(interaction: discord.Interaction, channel_name: str):
-    channel = discord.utils.get(interaction.guild.text_channels, name=channel_name)
-
-    if not channel or not isinstance(channel, discord.TextChannel):
-        await interaction.response.send_message("その名前のテキストチャンネルが見つからないよ。", ephemeral=True)
-        return
-
-    game_config["notice_channel_id"] = channel.id
-    save_game_config(game_config)
-
-    await interaction.response.send_message(
-        f"通知チャンネルを {channel.mention} に設定したよ！",
-        ephemeral=True
-    )
-
-
-@bot.tree.command(name="game_channel_status", description="ゲーム関連チャンネル設定を確認する")
-async def game_channel_status(interaction: discord.Interaction):
-    gl = game_config.get("game_list_channel_id")
-    nc = game_config.get("notice_channel_id")
-
-    msg = "**ゲーム関連チャンネル設定**\n"
-    msg += f"- ゲームリスト: {gl if gl else '未設定'}\n"
-    msg += f"- 通知チャンネル: {nc if nc else '未設定'}\n"
-
-    await interaction.response.send_message(msg, ephemeral=True)
-
-
 # =========================
 # VC管理コマンド（追加・削除・一覧）
 # =========================
@@ -309,9 +235,7 @@ async def vc_remove(interaction: discord.Interaction, vc_name: str):
         await interaction.response.send_message("そのVCは登録されていません。", ephemeral=True)
     else:
         await interaction.response.send_message(f"VC「{vc.name}」を管理対象から削除しました。", ephemeral=True)
-# =========================
-# VC管理対象一覧
-# =========================
+
 
 @bot.tree.command(name="vc_list", description="VC管理対象一覧を表示する")
 async def vc_list(interaction: discord.Interaction):
@@ -327,6 +251,7 @@ async def vc_list(interaction: discord.Interaction):
     msg = "\n".join(lines)
 
     await interaction.response.send_message(f"管理対象VC一覧:\n{msg}", ephemeral=True)
+
 # =========================
 # VC開始メッセージ変更
 # =========================
@@ -351,12 +276,12 @@ async def vc_set_start_message(interaction: discord.Interaction, vc_name: str, m
         f"VC「{vc.name}」の開始メッセージを変更しました:\n{message}",
         ephemeral=True
     )
+
 # =========================
 # VCログチャンネル設定
 # =========================
 
 @bot.tree.command(name="vc_set_log_channel", description="VCログを送るチャンネルを設定する")
-
 @app_commands.describe(channel_id="ログチャンネルのID")
 async def set_vc_log_channel(interaction: discord.Interaction, channel_id: str):
     ch_id_int = int(channel_id)
@@ -373,7 +298,8 @@ async def set_vc_log_channel(interaction: discord.Interaction, channel_id: str):
         f"ログチャンネルを {channel.mention} に設定しました。",
         ephemeral=True
     )
-    
+
+
 @bot.tree.command(name="vc_log_channel_status", description="現在のログチャンネル設定を確認する")
 async def vc_log_channel_status(interaction: discord.Interaction):
     log_ch = get_log_channel(interaction.guild)
@@ -457,13 +383,11 @@ async def vc_rename(interaction: discord.Interaction, vc_id: str, new_name: str)
     await vc.edit(name=new_name)
     await interaction.response.send_message(f"VC名を変更しました：{new_name}", ephemeral=True)
 
-    # VCチャット通知（管理対象VCのみ）
     target = get_vc_target(vc_id_int)
     if target:
         chat = await ensure_chat(interaction.guild, target["chat_name"], vc.category)
         await asyncio.sleep(2)
         await chat.send(f"VC名を **{new_name}** に変更しました。")
-
 
 # =========================
 # ゲーム選択対象VC（複数）
@@ -523,8 +447,6 @@ async def vc_game_targets(interaction: discord.Interaction):
     msg = "\n".join(lines)
 
     await interaction.response.send_message(f"ゲーム選択ボタン対象VC一覧:\n{msg}", ephemeral=True)
-
-
 # =========================
 # VC入退室イベント
 # =========================
@@ -532,32 +454,6 @@ async def vc_game_targets(interaction: discord.Interaction):
 @bot.event
 async def on_voice_state_update(member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
     guild = member.guild
-async def watch_vc_end(guild, vc, target):
-    await asyncio.sleep(1)
-    while True:
-        await asyncio.sleep(1)
-        if len(vc.members) == 0:
-            await handle_vc_end(guild, vc, target)
-            vc_watch_tasks.pop(vc.id, None)
-            break
-
-
-async def handle_vc_end(guild, vc, target):
-    chat = await ensure_chat(guild, target["chat_name"], vc.category)
-    await chat.send("VCが終了しました")
-
-    base = extract_base_name(vc.name)
-    if vc.name != base:
-        await vc.edit(name=base)
-
-    await asyncio.sleep(1)
-    await delete_chat(guild, target["chat_name"])
-
-    vc_sessions[vc.id] = {
-        "start_time": None,
-        "members": {},
-        "count": 0
-    }
 
     # =========================
     # ① 30日アクティブロール：VC参加時
@@ -602,15 +498,7 @@ async def handle_vc_end(guild, vc, target):
 
             join_time = datetime.now()
             await chat.send(f"{member.mention} が参加しました ({format_dt(join_time)})")
-        # VC監視タスク開始（退出イベントが来なくてもVC終了を検知）
-        if after.channel.id not in vc_watch_tasks:
-            vc_watch_tasks[after.channel.id] = asyncio.create_task(
-                watch_vc_end(member.guild, after.channel, target)
-            )
 
-
-
-            
             # セッション記録
             if member.id not in session["members"]:
                 session["members"][member.id] = {"join": join_time, "leave": None}
@@ -635,114 +523,121 @@ async def handle_vc_end(guild, vc, target):
                     target["log_start_message_id"] = msg.id
                     save_config(config)
 
-        # =========================
-        # ③ ゲーム選択ボタン：対象VC入室時
-        # =========================
-        if after.channel.id in config.get("game_targets", []):
-            if not before.channel or before.channel.id != after.channel.id:
-                games = await load_games(bot)
+        # VC監視タスク開始（退出イベントが来なくてもVC終了を検知）
+        if after.channel.id not in vc_watch_tasks:
+            vc_watch_tasks[after.channel.id] = asyncio.create_task(
+                watch_vc_end(member.guild, after.channel, target)
+            )
 
-                target = get_vc_target(after.channel.id)
-                if target:
-                    chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
-                    if not chat:
-                        chat = await guild.create_text_channel(
-                            target["chat_name"],
-                            category=after.channel.category
-                        )
+    # =========================
+    # ③ ゲーム選択ボタン：対象VC入室時
+    # =========================
+    if after.channel and after.channel.id in config.get("game_targets", []):
+        if not before.channel or before.channel.id != after.channel.id:
+            games = await load_games(bot)
 
-                    await asyncio.sleep(2)
-                    await chat.send(
-                        f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
-                        view=GameSelect(games)
-                    )
-        # ================================
-        # ④ VC管理：退出処理（遅延 + 自前カウント方式）
-        # ================================
-        if before.channel and after.channel is None:
-            target = get_vc_target(before.channel.id)
+            target = get_vc_target(after.channel.id)
             if target:
-                session = ensure_session(before.channel.id)
+                chat = discord.utils.get(guild.text_channels, name=target["chat_name"])
+                if not chat:
+                    chat = await guild.create_text_channel(
+                        target["chat_name"],
+                        category=after.channel.category
+                    )
 
-                # 自前カウント（退出時は -1）
-                if "count" not in session:
-                    session["count"] = 0
-                session["count"] -= 1
+                await asyncio.sleep(2)
+                await chat.send(
+                    f"{member.display_name} がVCに入りました。ゲームを選択してね👇",
+                    view=GameSelect(games)
+                )
 
-                # 遅延してから終了判定（Discord遅延対策）
+    # =========================
+    # ④ VC管理：退出処理（遅延 + 自前カウント方式）
+    # =========================
+    if before.channel and after.channel is None:
+        target = get_vc_target(before.channel.id)
+        if target:
+            session = ensure_session(before.channel.id)
+
+            # 自前カウント（退出時は -1）
+            if "count" not in session:
+                session["count"] = 0
+            session["count"] -= 1
+
+            # 遅延してから終了判定（Discord遅延対策）
+            await asyncio.sleep(1)
+
+            # VC終了判定（自前カウント + Discordのmembers両方見る）
+            is_empty = session["count"] <= 0 or len(before.channel.members) == 0
+
+            if is_empty:
+                chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
+
+                leave_time = datetime.now()
+                await chat.send(f"{member.mention} が退出しました（{format_dt(leave_time)}）")
+
+                # セッション記録
+                if member.id in session["members"]:
+                    session["members"][member.id]["leave"] = leave_time
+                else:
+                    session["members"][member.id] = {"join": None, "leave": leave_time}
+
+                start_time = session.get("start_time")
+                end_time = leave_time
+
+                # ログチャンネルへ終了ログ
+                log_ch = get_log_channel(guild)
+                if log_ch and start_time:
+                    lines = []
+                    for uid, times in session["members"].items():
+                        user = guild.get_member(uid)
+                        name = user.display_name if user else f"ID:{uid}"
+                        j = times["join"]
+                        l = times["leave"] or end_time
+                        lines.append(f"{name}: {format_dt(j) if j else '不明'} ～ {format_dt(l)}")
+
+                    participants = "\n".join(lines) if lines else "参加者情報なし"
+
+                    await log_ch.send(
+                        f"[VC終了] VC: {before.channel.name} (ID: {before.channel.id})\n"
+                        f"開始: {format_dt(start_time)}\n"
+                        f"終了: {format_dt(end_time)}\n"
+                        f"参加者:\n{participants}"
+                    )
+
+                    # 開始ログ削除
+                    start_msg_id = target.get("log_start_message_id")
+                    if start_msg_id:
+                        try:
+                            start_msg = await log_ch.fetch_message(start_msg_id)
+                            await start_msg.delete()
+                        except Exception:
+                            pass
+                        target["log_start_message_id"] = None
+                        save_config(config)
+
+                # VCチャット削除
                 await asyncio.sleep(1)
+                await delete_chat(guild, target["chat_name"])
 
-                # VC終了判定（自前カウント + Discordのmembers両方見る）
-                is_empty = session["count"] <= 0 or len(before.channel.members) == 0
+                # セッションリセット
+                vc_sessions[before.channel.id] = {
+                    "start_time": None,
+                    "members": {},
+                    "count": 0
+                }
 
-                if is_empty:
-                    chat = await ensure_chat(guild, target["chat_name"], before.channel.category)
+    # =========================
+    # ⑤ ゲーム選択ボタン：退出時はベース名に戻す
+    # =========================
+    if before.channel and before.channel.id in config.get("game_targets", []):
+        await asyncio.sleep(1)
+        if human_count(before.channel) == 0:
+            vc = before.channel
+            base = extract_base_name(vc.name)
+            if vc.name != base:
+                await vc.edit(name=base)
 
-                    leave_time = datetime.now()
-                    await chat.send(f"{member.mention} が退出しました（{format_dt(leave_time)}）")
-
-                    # セッション記録
-                    if member.id in session["members"]:
-                        session["members"][member.id]["leave"] = leave_time
-                    else:
-                        session["members"][member.id] = {"join": None, "leave": leave_time}
-
-                    start_time = session.get("start_time")
-                    end_time = leave_time
-
-                    # ログチャンネルへ終了ログ
-                    log_ch = get_log_channel(guild)
-                    if log_ch and start_time:
-                        lines = []
-                        for uid, times in session["members"].items():
-                            user = guild.get_member(uid)
-                            name = user.display_name if user else f"ID:{uid}"
-                            j = times["join"]
-                            l = times["leave"] or end_time
-                            lines.append(f"{name}: {format_dt(j) if j else '不明'} ～ {format_dt(l)}")
-
-                        participants = "\n".join(lines) if lines else "参加者情報なし"
-
-                        await log_ch.send(
-                            f"[VC終了] VC: {before.channel.name} (ID: {before.channel.id})\n"
-                            f"開始: {format_dt(start_time)}\n"
-                            f"終了: {format_dt(end_time)}\n"
-                            f"参加者:\n{participants}"
-                        )
-
-                        # 開始ログ削除
-                        start_msg_id = target.get("log_start_message_id")
-                        if start_msg_id:
-                            try:
-                                start_msg = await log_ch.fetch_message(start_msg_id)
-                                await start_msg.delete()
-                            except Exception:
-                                pass
-                            target["log_start_message_id"] = None
-                            save_config(config)
-
-                    # VCチャット削除
-                    await asyncio.sleep(1)
-                    await delete_chat(guild, target["chat_name"])
-
-                    # セッションリセット
-                    vc_sessions[before.channel.id] = {
-                        "start_time": None,
-                        "members": {},
-                        "count": 0
-                    }
-
-            # ================================
-            # ⑤ ゲーム選択ボタン：退出時はベース名に戻す
-            # ================================
-            if before.channel.id in config.get("game_targets", []):
-                # 遅延してから確認（Discord遅延対策）
-                await asyncio.sleep(1)
-                if human_count(before.channel) == 0:
-                    vc = before.channel
-                    base = extract_base_name(vc.name)
-                    if vc.name != base:
-                        await vc.edit(name=base)
 
 # =========================
 # VC監視タスク（退出イベントが来なくても VC 終了を検知）
@@ -776,7 +671,6 @@ async def handle_vc_end(guild, vc, target):
     }
 
 
-
 # =========================
 # 30日アクティブロールチェック（毎日1回）
 # =========================
@@ -807,11 +701,10 @@ async def check_inactive_users():
 
             last_date = datetime.strptime(last, "%Y-%m-%d")
 
-            # 30日以上VC参加なし
             if now - last_date > timedelta(days=30):
                 if role in member.roles:
                     await member.remove_roles(role)
-                    print(f"{member.display_name} からアクティブロールを剥奪した")
+                    print(f"{member.display_name} からアクティブロールを削除した")
 
 
 # =========================
@@ -820,16 +713,14 @@ async def check_inactive_users():
 
 @bot.event
 async def on_ready():
-    print(f"Bot起動完了: {bot.user}")
-    await bot.tree.sync()
+    print(f"ログインしました: {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"スラッシュコマンド同期: {len(synced)} 件")
+    except Exception as e:
+        print(f"同期エラー: {e}")
 
-    # 30日ロールチェック開始
-    check_inactive_users.start()
-
-
-# =========================
-# Bot実行
-# =========================
-
+check_inactive_users.start()
 bot.run(TOKEN)
+
 
