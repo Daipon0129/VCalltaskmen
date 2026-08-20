@@ -720,5 +720,5 @@ async def on_ready():
     except Exception as e:
         print(f"同期エラー: {e}")
 
-check_inactive_users.start()
+    check_inactive_users.start()
 bot.run(TOKEN)
